@@ -61,10 +61,10 @@ function parseTree(treeText) {
       const connectorMatch = cleanLine.match(/^((?:│ | )*)(?:├── |└── )(.*)$/);
       if (!connectorMatch) continue;
 
-      const prefix = connectorMatch[1] |
+      const prefix = connectorMatch |
 
-| '';
-      name = (connectorMatch[2] |
+| [span_0](start_span)[span_0](end_span)'';
+      name = (connectorMatch[span_3](start_span)[span_3](end_span) |
 
 | '').trim();
       depth = prefix.length / 4 + 1;
