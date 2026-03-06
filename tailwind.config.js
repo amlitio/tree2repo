@@ -1,12 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './pages/**/*.{js,ts,jsx,tsx}',
+    './components/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
-      // Custom animations for your success modal
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
       },
@@ -18,5 +17,5 @@ module.exports = {
       },
     },
   },
-  plugins:,
-}
+  plugins: [],
+};
