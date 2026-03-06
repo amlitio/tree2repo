@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import JSZip from 'jszip';
 
 const TEMPLATES = {
   python: `weather-pro-repo/
-├──.gitignore
+├── .gitignore
 ├── LICENSE
 ├── README.md
 ├── pyproject.toml
@@ -23,7 +23,7 @@ const TEMPLATES = {
 │   │   └── Header.jsx
 │   ├── App.js
 │   └── index.js
-├──.gitignore
+├── .gitignore
 ├── package.json
 └── README.md`,
   node: `node-api-server/
@@ -32,82 +32,85 @@ const TEMPLATES = {
 │   ├── models/
 │   ├── routes/
 │   └── app.js
-├──.env
+├── .env
 ├── package.json
-└── README.md`
+└── README.md`,
 };
 
-/**
- * Parses a tree-style text input into a flat structure with depth info.
- * Folders must end with "/" to avoid ambiguity with files like LICENSE, Dockerfile, etc.
- */
 function parseTree(treeText) {
   const lines = treeText.split('\n');
-  const structure =;
-  const pathStack =;
+  const items = [];
+  const stack = [];
 
   for (const rawLine of lines) {
     if (!rawLine.trim()) continue;
 
-    const cleanLine = rawLine.split('<--').replace(/\t/g, '    ');
-    if (!cleanLine.trim()) continue;
+    const line = rawLine.split('<--')[0].replace(/\t/g, '    ');
+    if (!line.trim()) continue;
 
-    // Root line: no tree connector
-    const hasConnector = /[├└│]/.test(cleanLine);
+    const hasConnector = /[├└│]/.test(line);
     let depth = 0;
-    let name = cleanLine.trim();
+    let name = line.trim();
 
     if (hasConnector) {
-      const connectorMatch = cleanLine.match(/^((?:│ | )*)(?:├── |└── )(.*)$/);
-      if (!connectorMatch) continue;
+      const match = line.match(/^((?:│   |    )*)(?:├── |└── )(.*)$/);
+      if (!match) continue;
 
-      const prefix = connectorMatch |
-
-| [span_0](start_span)[span_0](end_span)'';
-      name = (connectorMatch[span_3](start_span)[span_3](end_span) |
-
-| '').trim();
+      const prefix = match[1] || '';
+      name = (match[2] || '').trim();
       depth = prefix.length / 4 + 1;
     }
 
     if (!name) continue;
 
     const isFolder = name.endsWith('/');
-    const normalizedName = isFolder? name.slice(0, -1) : name;
+    const normalizedName = isFolder ? name.slice(0, -1) : name;
 
-    while (pathStack.length > depth) {
-      pathStack.pop();
+    while (stack.length > depth) {
+      stack.pop();
     }
 
-    const parentPath = pathStack.length? pathStack : '';
-    const fullPath = parentPath? `${parentPath}/${normalizedName}` : normalizedName;
+    const parentPath = stack.length > 0 ? stack[stack.length - 1] : '';
+    const fullPath = parentPath
+      ? `${parentPath}/${normalizedName}`
+      : normalizedName;
 
-    structure.push({
+    items.push({
       name,
       normalizedName,
       isFolder,
       depth,
-      fullPath
+      fullPath,
     });
 
     if (isFolder) {
-      pathStack[depth] = fullPath;
-      pathStack.length = depth + 1;
+      stack[depth] = fullPath;
+      stack.length = depth + 1;
     }
   }
 
-  return structure;
+  return items;
 }
 
 export default function TreeToRepo() {
-  const = useState(false);
-  const = useState(TEMPLATES.python);
-  const [preview, setPreview] = useState();
-  const = useState('idle');
+  const [showModal, setShowModal] = useState(false);
+  const [treeText, setTreeText] = useState(TEMPLATES.python);
+  const [status, setStatus] = useState('idle');
+
+  const preview = useMemo(() => parseTree(treeText), [treeText]);
 
   useEffect(() => {
-    setPreview(parseTree(treeText));
-  },);
+    if (!showModal) return;
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showModal]);
 
   const generateZip = async () => {
     setStatus('processing');
@@ -115,6 +118,10 @@ export default function TreeToRepo() {
     try {
       const zip = new JSZip();
       const structure = parseTree(treeText);
+
+      if (structure.length === 0) {
+        throw new Error('No valid structure detected.');
+      }
 
       for (const item of structure) {
         if (item.isFolder) {
@@ -133,12 +140,14 @@ export default function TreeToRepo() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
       URL.revokeObjectURL(url);
 
       setShowModal(true);
       setStatus('success');
-      setTimeout(() => setStatus('idle'), 3000);
+
+      window.setTimeout(() => {
+        setStatus('idle');
+      }, 3000);
     } catch (error) {
       console.error('ZIP generation failed:', error);
       setStatus('error');
@@ -146,144 +155,165 @@ export default function TreeToRepo() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-zinc-300 font-sans p-4 md:p-10">
+    <>
       <Head>
         <title>Tree2Repo | Live Builder</title>
+        <meta
+          name="description"
+          content="Convert text-based project trees into downloadable ZIP repository structures."
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <div className="max-w-6xl mx-auto flex flex-col gap-8">
-        <header className="flex justify-between items-end border-b border-zinc-800 pb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              Tree2Repo{' '}
-              <span className="text-green-500 text-sm font-mono bg-green-500/10 px-2 py-1 rounded">
-                v2.0
-              </span>
-            </h1>
-            <p className="text-zinc-500 text-sm mt-1">
-              Convert text diagrams to physical repositories.
-            </p>
-          </div>
-
-          <select
-            onChange={(e) => setTreeText(TEMPLATES[e.target.value] |
-
-| '')}
-            className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-sm outline-none focus:border-green-500"
-            defaultValue="python"
-          >
-            <option value="python">Python Template</option>
-            <option value="react">React Template</option>
-            <option value="node">Node Template</option>
-          </select>
-        </header>
-
-        <main className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-              <div className="bg-zinc-800/50 px-4 py-2 border-b border-zinc-800 text-xs font-mono uppercase tracking-widest text-zinc-500">
-                Input ASCII Tree
-              </div>
-              <textarea
-                className="w-full h-[500px] bg-transparent p-4 font-mono text-sm text-green-400 outline-none resize-none"
-                value={treeText}
-                onChange={(e) => setTreeText(e.target.value)}
-                spellCheck={false}
-              />
+      <div className="min-h-screen bg-[#0a0a0a] p-4 font-sans text-zinc-300 md:p-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-8">
+          <header className="flex flex-col gap-4 border-b border-zinc-800 pb-6 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-bold text-white">
+                Tree2Repo
+                <span className="rounded bg-green-500/10 px-2 py-1 font-mono text-sm text-green-500">
+                  v2.0
+                </span>
+              </h1>
+              <p className="mt-1 text-sm text-zinc-500">
+                Convert text diagrams to physical repositories.
+              </p>
             </div>
 
-            <button
-              onClick={generateZip}
-              disabled={status === 'processing'}
-              className={`w-full py-4 rounded-xl font-bold transition-all ${
-                status === 'processing'
-                 ? 'bg-zinc-700 text-zinc-300 cursor-not-allowed'
-                  : status === 'success'
-                 ? 'bg-green-600 text-white'
-                  : status === 'error'
-                 ? 'bg-red-600 text-white'
-                  : 'bg-green-500 hover:bg-green-400 text-black'
-              }`}
+            <select
+              value={Object.keys(TEMPLATES).find((key) => TEMPLATES[key] === treeText) || ''}
+              onChange={(e) => setTreeText(TEMPLATES[e.target.value] || '')}
+              className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm outline-none focus:border-green-500"
+              aria-label="Choose a template"
             >
-              {status === 'processing'
-               ? 'Generating...'
-                : status === 'success'
-               ? '✓ Downloaded ZIP'
-                : status === 'error'
-               ? 'Failed — Try Again'
-                : 'Download Project'}
-            </button>
-          </div>
+              <option value="python">Python Template</option>
+              <option value="react">React Template</option>
+              <option value="node">Node Template</option>
+            </select>
+          </header>
 
-          {showModal && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
-              <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl max-w-sm w-full text-center shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/30">
-                  <svg
-                    className="w-8 h-8"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="3"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
+          <main className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <section className="flex flex-col gap-4">
+              <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+                <div className="border-b border-zinc-800 bg-zinc-800/50 px-4 py-2 font-mono text-xs uppercase tracking-widest text-zinc-500">
+                  Input ASCII Tree
                 </div>
 
-                <h3 className="text-xl font-bold text-white mb-2">Success!</h3>
-                <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-                  Your project structure is ready. Check your <b>Downloads</b> folder
-                  for the ZIP file.
-                </p>
-
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="w-full py-3 bg-green-500 hover:bg-green-400 text-black rounded-lg text-sm font-bold transition-all transform active:scale-95"
-                >
-                  Got it!
-                </button>
+                <textarea
+                  className="h-[500px] w-full resize-none bg-transparent p-4 font-mono text-sm text-green-400 outline-none"
+                  value={treeText}
+                  onChange={(e) => setTreeText(e.target.value)}
+                  spellCheck={false}
+                  aria-label="Project tree input"
+                />
               </div>
-            </div>
-          )}
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col">
-            <div className="bg-zinc-800/50 px-4 py-2 border-b border-zinc-800 text-xs font-mono uppercase tracking-widest text-zinc-500">
-              Live Preview
-            </div>
+              <button
+                type="button"
+                onClick={generateZip}
+                disabled={status === 'processing'}
+                className={`w-full rounded-xl py-4 font-bold transition-all ${
+                  status === 'processing'
+                    ? 'cursor-not-allowed bg-zinc-700 text-zinc-300'
+                    : status === 'success'
+                    ? 'bg-green-600 text-white'
+                    : status === 'error'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-green-500 text-black hover:bg-green-400'
+                }`}
+              >
+                {status === 'processing'
+                  ? 'Generating...'
+                  : status === 'success'
+                  ? '✓ Downloaded ZIP'
+                  : status === 'error'
+                  ? 'Failed — Try Again'
+                  : 'Download Project'}
+              </button>
+            </section>
 
-            <div className="p-6 overflow-y-auto h-[500px] font-mono text-sm space-y-1">
-              {preview.length === 0? (
-                <div className="text-zinc-500">No valid structure detected.</div>
-              ) : (
-                preview.map((item, i) => (
-                  <div
-                    key={`${item.fullPath}-${i}`}
-                    style={{ paddingLeft: `${item.depth * 20}px` }}
-                    className="flex items-center gap-2 group"
-                  >
-                    <span className="text-zinc-600">
-                      {item.isFolder? '📁' : '📄'}
-                    </span>
-                    <span
-                      className={
-                        item.isFolder
-                         ? 'text-blue-400 font-semibold'
-                          : 'text-zinc-300'
-                      }
-                    >
-                      {item.name}
-                    </span>
+            <section className="flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+              <div className="border-b border-zinc-800 bg-zinc-800/50 px-4 py-2 font-mono text-xs uppercase tracking-widest text-zinc-500">
+                Live Preview
+              </div>
+
+              <div className="h-[500px] overflow-y-auto p-6 font-mono text-sm">
+                {preview.length === 0 ? (
+                  <div className="text-zinc-500">No valid structure detected.</div>
+                ) : (
+                  <div className="space-y-1">
+                    {preview.map((item, index) => (
+                      <div
+                        key={`${item.fullPath}-${index}`}
+                        className="flex items-center gap-2"
+                        style={{ paddingLeft: `${item.depth * 20}px` }}
+                      >
+                        <span className="text-zinc-600">
+                          {item.isFolder ? '📁' : '📄'}
+                        </span>
+                        <span
+                          className={
+                            item.isFolder
+                              ? 'font-semibold text-blue-400'
+                              : 'text-zinc-300'
+                          }
+                        >
+                          {item.name}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))
-              )}
+                )}
+              </div>
+            </section>
+          </main>
+        </div>
+
+        {showModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="success-title"
+          >
+            <div className="w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center shadow-2xl">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-green-500/30 bg-green-500/20 text-green-400">
+                <svg
+                  className="h-8 w-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="3"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+
+              <h2 id="success-title" className="mb-2 text-xl font-bold text-white">
+                Success!
+              </h2>
+
+              <p className="mb-6 text-sm leading-relaxed text-zinc-400">
+                Your project structure is ready. Check your <b>Downloads</b> folder
+                for the ZIP file.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="w-full rounded-lg bg-green-500 py-3 text-sm font-bold text-black transition-all hover:bg-green-400 active:scale-95"
+              >
+                Got it!
+              </button>
             </div>
           </div>
-        </main>
+        )}
       </div>
-    </div>
+    </>
   );
 }
